@@ -94,9 +94,9 @@ modified f = XS.modified $
 minimizeWindow :: Window -> X ()
 minimizeWindow w = withWindowSet $ \ws ->
   whenX (modified $ M.insert w (M.lookup w $ W.floating ws)) $ do
+    BW.focusDown
     setMinimized w
     windows $ W.sink w
-    BW.focusDown
 
 
 -- | Maximize window and apply a function to maximized window and 'WindowSet'
