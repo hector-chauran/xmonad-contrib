@@ -147,8 +147,8 @@ scratchpadAction xs n =
                                               hideOthers xs n
                                               windows W.shiftMaster
 
-                                  (w:_) -> do toggleWindow w
-                                              whenX (runQuery isExclusive w) (hideOthers xs n)
+                                  (w:_) -> do whenX (runQuery isExclusive w) (hideOthers xs n)
+                                              toggleWindow w
   where
     toggleWindow w = liftA2 (&&) (runQuery isMaximized w) (onCurrentScreen w) >>= \case
       True  -> whenX (onCurrentScreen w) (minimizeWindow w)
