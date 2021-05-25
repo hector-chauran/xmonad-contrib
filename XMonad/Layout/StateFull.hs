@@ -30,11 +30,9 @@ module XMonad.Layout.StateFull (
 ) where
 
 import XMonad hiding ((<&&>))
+import XMonad.Prelude (fromMaybe, (<|>))
 import qualified XMonad.StackSet as W
 import XMonad.Util.Stack (findZ)
-
-import Data.Maybe (fromMaybe)
-import Control.Applicative ((<|>))
 
 -- $Usage
 --
@@ -66,6 +64,7 @@ type StateFull = FocusTracking Full
 
 -- | A pattern synonym for the primary use case of the @FocusTracking@
 --   transformer; using @Full@.
+pattern StateFull :: FocusTracking Full a
 pattern StateFull = FocusTracking Nothing Full
 
 instance LayoutClass l Window => LayoutClass (FocusTracking l) Window where

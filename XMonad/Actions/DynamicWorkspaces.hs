@@ -35,14 +35,12 @@ module XMonad.Actions.DynamicWorkspaces (
                                          WorkspaceIndex
                                        ) where
 
+import XMonad.Prelude (find, isNothing, when)
 import XMonad hiding (workspaces)
 import XMonad.StackSet hiding (filter, modify, delete)
 import XMonad.Prompt.Workspace ( Wor(Wor), workspacePrompt )
 import XMonad.Prompt ( XPConfig, mkXPrompt )
 import XMonad.Util.WorkspaceCompare ( getSortByIndex )
-import Data.List (find)
-import Data.Maybe (isNothing)
-import Control.Monad (when)
 import qualified Data.Map.Strict as Map
 import qualified XMonad.Util.ExtensibleState as XS
 
@@ -127,14 +125,14 @@ renameWorkspace conf = workspacePrompt conf renameWorkspaceByName
 
 renameWorkspaceByName :: String -> X ()
 renameWorkspaceByName w = do old  <- gets (currentTag . windowset)
-			     windows $ \s -> let sett wk = wk { tag = w }
-						 setscr scr = scr { workspace = sett $ workspace scr }
-						 sets q = q { current = setscr $ current q }
+                             windows $ \s -> let sett wk = wk { tag = w }
+                                                 setscr scr = scr { workspace = sett $ workspace scr }
+                                                 sets q = q { current = setscr $ current q }
                                              in sets $ removeWorkspace' w s
-			     updateIndexMap old w
-  where updateIndexMap old new = do
+                             updateIndexMap old w
+  where updateIndexMap oldIM newIM = do
           wmap <- XS.gets workspaceIndexMap
-          XS.modify $ \s -> s {workspaceIndexMap = Map.map (\t -> if t == old then new else t) wmap}
+          XS.modify $ \s -> s {workspaceIndexMap = Map.map (\t -> if t == oldIM then newIM else t) wmap}
 
 toNthWorkspace :: (String -> X ()) -> Int -> X ()
 toNthWorkspace job wnum = do sort <- getSortByIndex

@@ -57,11 +57,10 @@ module XMonad.Actions.Navigation2D ( -- * Usage
                                    , Direction2D(..)
                                    ) where
 
-import Control.Applicative
 import qualified Data.List as L
 import qualified Data.Map as M
-import Data.Maybe
 import Data.Ord (comparing)
+import XMonad.Prelude
 import XMonad hiding (Screen)
 import qualified XMonad.StackSet as W
 import qualified XMonad.Util.ExtensibleState as XS
@@ -890,10 +889,6 @@ swap win winset = W.focusWindow cur
 centerOf :: Rectangle -> (Position, Position)
 centerOf r = (rect_x r + fi (rect_width r) `div` 2, rect_y r + fi (rect_height r) `div` 2)
 
--- | Shorthand for integer conversions
-fi :: (Integral a, Num b) => a -> b
-fi = fromIntegral
-
 -- | Functions to choose the subset of windows to operate on
 thisLayer, otherLayer :: a -> a -> a
 thisLayer  = curry fst
@@ -945,16 +940,16 @@ sortedScreens :: WindowSet -> [Screen]
 sortedScreens winset = L.sortBy cmp
                      $ W.screens winset
   where
-    cmp s1 s2 | x1 < x2   = LT
-              | x1 > x2   = GT
-              | y1 < x2   = LT
-              | y1 > y2   = GT
+    cmp s1 s2 | x < x'   = LT
+              | x > x'   = GT
+              | y < x'   = LT
+              | y > y'   = GT
               | otherwise = EQ
       where
-        (x1, y1) = centerOf (screenRect . W.screenDetail $ s1)
-        (x2, y2) = centerOf (screenRect . W.screenDetail $ s2)
+        (x , y ) = centerOf (screenRect . W.screenDetail $ s1)
+        (x', y') = centerOf (screenRect . W.screenDetail $ s2)
 
 
 -- | Calculates the L1-distance between two points.
 lDist :: (Position, Position) -> (Position, Position) -> Int
-lDist (x1, y1) (x2, y2) = abs (fi $ x1 - x2) + abs (fi $ y1 - y2)
+lDist (x, y) (x', y') = abs (fi $ x - x') + abs (fi $ y - y')

@@ -1,5 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE NamedFieldPuns      #-}
+{-# LANGUAGE PatternGuards       #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  XMonad.Hooks.StatusBar.PP
@@ -36,7 +36,7 @@ module XMonad.Hooks.StatusBar.PP (
 
     -- * Formatting utilities
     wrap, pad, trim, shorten, shorten', shortenLeft, shortenLeft',
-    xmobarColor, xmobarAction, xmobarBorder,
+    xmobarColor, xmobarFont, xmobarAction, xmobarBorder,
     xmobarRaw, xmobarStrip, xmobarStripTags,
     dzenColor, dzenEscape, dzenStrip, filterOutWsPP,
 
@@ -46,15 +46,10 @@ module XMonad.Hooks.StatusBar.PP (
 
     ) where
 
-import Control.Applicative (liftA2)
-import Control.Monad (msum)
-import Data.Char (isSpace)
-import Data.List (intercalate, isPrefixOf, sortOn, stripPrefix)
-import Data.Maybe (catMaybes, fromMaybe, isJust, mapMaybe)
-
 import qualified XMonad.StackSet as S
 
 import XMonad
+import XMonad.Prelude
 
 import XMonad.Util.NamedWindows
 import XMonad.Util.WorkspaceCompare
@@ -68,9 +63,8 @@ import XMonad.Hooks.UrgencyHook
 -- > import XMonad.Hooks.StatusBar.PP
 -- >
 -- > myPP = def { ppCurrent = xmobarColor "black" "white" }
--- > main = do
--- >   mySB <- statusBarProp "xmobar" (pure myPP)
--- >   xmonad =<< withEasySB mySB defToggleStrutsKey myConfig
+-- > mySB = statusBarProp "xmobar" (pure myPP)
+-- > main = xmonad . withEasySB mySB defToggleStrutsKey $ myConfig
 --
 -- Check "XMonad.Hooks.StatusBar" for more examples and an in depth
 -- explanation.
@@ -101,7 +95,9 @@ data PP = PP { ppCurrent :: WorkspaceId -> String
              , ppWsSep :: String
                -- ^ separator to use between workspace tags
              , ppTitle :: String -> String
-               -- ^ window title format for the focused window
+               -- ^ window title format for the focused window. To display
+               -- the titles of all windows—even unfocused ones—check
+               -- 'XMonad.Util.Loggers.logTitles'.
              , ppTitleSanitize :: String -> String
               -- ^ escape / sanitizes input to 'ppTitle'
              , ppLayout :: String -> String
@@ -289,6 +285,12 @@ dzenStrip = strip [] where
       | '^' == head x       = strip keep (drop 1 . dropWhile (/= ')') $ x)
       | otherwise           = let (good,x') = span (/= '^') x
                               in strip (keep ++ good) x'
+
+-- | Use xmobar escape codes to output a string with the font at the given index
+xmobarFont :: Int     -- ^ index: index of the font to use (0: standard font)
+           -> String  -- ^ output string
+           -> String
+xmobarFont index = wrap ("<fn=" ++ show index ++ ">") "</fn>"
 
 -- | Use xmobar escape codes to output a string with given foreground
 --   and background colors.

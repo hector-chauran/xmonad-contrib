@@ -29,15 +29,13 @@ module XMonad.Actions.SpawnOn (
 ) where
 
 import Control.Exception (tryJust)
-import Control.Monad (guard)
-import Data.List (isInfixOf)
-import Data.Maybe (isJust)
 import System.IO.Error (isDoesNotExistError)
 import System.IO.Unsafe (unsafePerformIO)
 import System.Posix.Types (ProcessID)
 import Text.Printf (printf)
 
 import XMonad
+import XMonad.Prelude
 import qualified XMonad.StackSet as W
 
 import XMonad.Hooks.ManageHelpers
@@ -75,8 +73,8 @@ instance ExtensionClass Spawner where
 
 
 getPPIDOf :: ProcessID -> Maybe ProcessID
-getPPIDOf pid =
-    case unsafePerformIO . tryJust (guard . isDoesNotExistError) . readFile . printf "/proc/%d/stat" $ toInteger pid of
+getPPIDOf thisPid =
+    case unsafePerformIO . tryJust (guard . isDoesNotExistError) . readFile . printf "/proc/%d/stat" $ toInteger thisPid of
       Left _         -> Nothing
       Right contents -> case lines contents of
                           []        -> Nothing
@@ -85,11 +83,11 @@ getPPIDOf pid =
                                          _                    -> Nothing
 
 getPPIDChain :: ProcessID -> [ProcessID]
-getPPIDChain pid' = ppid_chain pid' []
-    where ppid_chain pid acc =
-              if pid == 0
+getPPIDChain thisPid = ppid_chain thisPid []
+    where ppid_chain pid' acc =
+              if pid' == 0
               then acc
-              else case getPPIDOf pid of
+              else case getPPIDOf pid' of
                      Nothing   -> acc
                      Just ppid -> ppid_chain ppid (ppid : acc)
 

@@ -32,6 +32,7 @@ module XMonad.Layout.Fullscreen
     ) where
 
 import           XMonad
+import           XMonad.Prelude
 import           XMonad.Layout.LayoutModifier
 import           XMonad.Layout.NoBorders        (SmartBorder, smartBorders)
 import           XMonad.Hooks.EwmhDesktops      (fullscreenStartup)
@@ -40,11 +41,7 @@ import           XMonad.Util.WindowProperties
 import qualified XMonad.Util.Rectangle          as R
 import qualified XMonad.StackSet                as W
 
-import           Data.List
-import           Data.Maybe
-import           Data.Monoid
 import qualified Data.Map                       as M
-import           Control.Monad
 import           Control.Arrow                  (second)
 
 -- $usage
@@ -216,9 +213,7 @@ fullscreenEventHook (ClientMessageEvent _ _ _ dpy win typ (action:dats)) = do
   wmstate <- getAtom "_NET_WM_STATE"
   fullsc <- getAtom "_NET_WM_STATE_FULLSCREEN"
   wstate <- fromMaybe [] <$> getProp32 wmstate win
-  let fi :: (Integral i, Num n) => i -> n
-      fi = fromIntegral
-      isFull = fi fullsc `elem` wstate
+  let isFull = fi fullsc `elem` wstate
       remove = 0
       add = 1
       toggle = 2

@@ -31,7 +31,7 @@ cabal-version:      >= 1.8
 build-type:         Simple
 bug-reports:        https://github.com/xmonad/xmonad-contrib/issues
 
-tested-with:        GHC == 8.4.4 || == 8.6.5 || == 8.8.4 || == 8.10.3
+tested-with:        GHC == 8.4.4 || == 8.6.5 || == 8.8.4 || == 8.10.3 || == 9.0.1
 
 source-repository head
   type:     git
@@ -41,10 +41,10 @@ source-repository head
 flag use_xft
   description: Use Xft to render text
 
-flag testing
-  description: Testing mode
-  manual: True
-  default: False
+flag pedantic
+  description: Be pedantic (-Werror and the like)
+  default:     False
+  manual:      True
 
 library
     build-depends: base >= 4.9 && < 5,
@@ -61,18 +61,20 @@ library
                    xmonad >= 0.15 && < 0.16,
                    utf8-string
 
-    ghc-options:   -fwarn-tabs -Wall -Wno-unused-do-bind -Wno-unused-imports
+    ghc-options:   -Wall -Wno-unused-do-bind
+
+    if flag(pedantic)
+       ghc-options: -Werror -Wwarn=deprecations
 
     -- Keep this in sync with the oldest version in 'tested-with'
-    if impl(ghc <= 8.4.4)
-       ghc-options: -Werror=unused-imports
+    if impl(ghc > 8.4.4)
+       -- don't treat unused-imports warning as errors, they may be necessary
+       -- for compatibility with older versions of base (or other deps)
+       ghc-options: -Wwarn=unused-imports
 
     if flag(use_xft)
         build-depends: X11-xft >= 0.2
         cpp-options: -DXFT
-
-    if flag(testing)
-        ghc-options:    -fwarn-tabs -Werror
 
     exposed-modules:    XMonad.Actions.AfterDrag
                         XMonad.Actions.BluetileCommands
@@ -298,6 +300,7 @@ library
                         XMonad.Layout.WindowSwitcherDecoration
                         XMonad.Layout.WorkspaceDir
                         XMonad.Layout.ZoomRow
+                        XMonad.Prelude
                         XMonad.Prompt
                         XMonad.Prompt.AppLauncher
                         XMonad.Prompt.AppendFile
@@ -388,13 +391,16 @@ test-suite tests
                   XMonad.Layout.LayoutModifier
                   XMonad.Layout.LimitWindows
                   XMonad.Layout.NoBorders
+                  XMonad.Prelude
                   XMonad.Prompt
                   XMonad.Prompt.Shell
                   XMonad.Util.ExtensibleState
                   XMonad.Util.Font
                   XMonad.Util.Image
                   XMonad.Util.PureX
+                  XMonad.Util.Rectangle
                   XMonad.Util.Run
+                  XMonad.Util.Stack
                   XMonad.Util.Types
                   XMonad.Util.WindowProperties
                   XMonad.Util.WorkspaceCompare
@@ -413,3 +419,13 @@ test-suite tests
                , utf8-string
                , xmonad >= 0.15 && < 0.16
   cpp-options: -DTESTING
+  ghc-options: -Wall -Wno-unused-do-bind
+
+  if flag(pedantic)
+     ghc-options: -Werror -Wwarn=deprecations
+
+  -- Keep this in sync with the oldest version in 'tested-with'
+  if impl(ghc > 8.4.4)
+     -- don't treat unused-imports warning as errors, they may be necessary
+     -- for compatibility with older versions of base (or other deps)
+     ghc-options: -Wwarn=unused-imports

@@ -21,7 +21,7 @@ module XMonad.Layout.TabBarDecoration
     , module XMonad.Layout.ResizeScreen
     ) where
 
-import Data.List
+import XMonad.Prelude
 import XMonad
 import qualified XMonad.StackSet as S
 import XMonad.Layout.Decoration
@@ -75,4 +75,5 @@ instance Eq a => DecorationStyle TabBarDecoration a where
               ny  = case p of
                      Top    -> y
                      Bottom -> y + fi ht - fi dht
+                     _      -> error "Position must be 'Top' or 'Bottom'"
               nx  = (x +) $ maybe 0 (fi . loc) $ w `elemIndex` wrs

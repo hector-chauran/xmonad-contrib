@@ -36,12 +36,10 @@ module XMonad.Layout.Decoration
     , DecorationState, OrigWin
     ) where
 
-import Control.Monad (when)
-import Data.Maybe
-import Data.List
 import Foreign.C.Types(CInt)
 
 import XMonad
+import XMonad.Prelude
 import qualified XMonad.StackSet as W
 import XMonad.Hooks.UrgencyHook
 import XMonad.Layout.LayoutModifier
@@ -247,7 +245,6 @@ instance (DecorationStyle ds Window, Shrinker s) => LayoutModifier (Decoration d
                                 let ndwrs = zip toAdd $ repeat (Nothing,Nothing)
                                 ndecos <- resync (ndwrs ++ del_dwrs d dwrs) wrs
                                 processState (s {decos = ndecos })
-        | otherwise        = return (wrs, Nothing)
 
         where
           ws        = map fst wrs

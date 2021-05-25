@@ -53,7 +53,6 @@ module XMonad.Hooks.StatusBar (
   ) where
 
 import Control.Exception (SomeException, try)
-import Control.Monad (void)
 import qualified Codec.Binary.UTF8.String as UTF8 (encode)
 import System.Posix.Signals (sigTERM, signalProcessGroup)
 import System.Posix.Types (ProcessID)
@@ -63,6 +62,7 @@ import qualified Data.Map        as M
 import Foreign.C (CChar)
 
 import XMonad
+import XMonad.Prelude (void)
 
 import XMonad.Util.Run
 import qualified XMonad.Util.ExtensibleState as XS
@@ -338,6 +338,9 @@ statusBarPipe cmd xpp  = do
 -- One thing to keep in mind is that if multiple bars read from the same
 -- property, their content will be the same. If you want to use property-based
 -- logging with multiple bars, they should read from different properties.
+--
+-- "XMonad.Util.Loggers" includes loggers that can be bound to specific screens,
+-- like 'logCurrentOnScreen', that might be useful with multiple screens.
 --
 -- Long-time xmonad users will note that the above config is equivalent to
 -- the following less robust and more verbose configuration that they might

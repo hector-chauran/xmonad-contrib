@@ -88,6 +88,10 @@
       now recommended to directly use `XMonad.Hooks.WorkspaceHistory`
       instead.
 
+    - Added `TopicItem`, as well as the helper functions `topicNames`,
+      `tiActions`, `tiDirs`, `noAction`, and `inHome` for a more
+      convenient specification of topics.
+
 ### New Modules
 
   * `XMonad.Hooks.StatusBar.PP`
@@ -107,12 +111,12 @@
     - Added `filterOutWsPP` for filtering out certain workspaces from being
       displayed.
 
-    - Added `xmobarBorder` function to create borders around strings.
+    - Added `xmobarBorder` for creating borders around strings and
+      `xmobarFont` for selecting an alternative font.
 
     - Added `ppRename` to `PP`, which makes it possible for extensions like
       `workspaceNamesPP`, `marshallPP` and/or `clickablePP` to compose
       intuitively.
-
 
   * `XMonad.Hooks.StatusBar`
 
@@ -230,6 +234,11 @@
 ### Bug Fixes and Minor Changes
 
   * Add support for GHC 9.0.1.
+
+  * `XMonad.Actions.DynamicWorkspaceGroups`
+
+    - Add support for `XMonad.Actions.TopicSpace` through `viewTopicGroup` and
+      `promptTopicGroupView`.
 
   * `XMonad.Actions.TreeSelect`
 

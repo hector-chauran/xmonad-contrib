@@ -34,6 +34,7 @@ module XMonad.Layout.BinarySpacePartition (
   ) where
 
 import XMonad
+import XMonad.Prelude hiding (insert)
 import qualified XMonad.StackSet as W
 import XMonad.Util.Stack hiding (Zipper)
 import XMonad.Util.Types
@@ -45,9 +46,6 @@ import XMonad.Util.XUtils
 
 import qualified Data.Map as M
 import qualified Data.Set as S
-import Data.List ((\\), elemIndex, foldl')
-import Data.Maybe (fromMaybe, isNothing, isJust, mapMaybe, catMaybes)
-import Control.Monad
 import Data.Ratio ((%))
 
 -- $usage
@@ -286,11 +284,13 @@ insertLeftLeaf :: Tree Split -> Zipper Split -> Maybe (Zipper Split)
 insertLeftLeaf (Leaf n) ((Node x l r), crumb:cs) = Just (Node (Split (oppositeAxis . axis . parentVal $ crumb) 0.5) (Leaf n) (Node x l r), crumb:cs)
 insertLeftLeaf (Leaf n) (Leaf x, crumb:cs) = Just (Node (Split (oppositeAxis . axis . parentVal $ crumb) 0.5) (Leaf n) (Leaf x), crumb:cs)
 insertLeftLeaf (Node _ _ _) z = Just z
+insertLeftLeaf _ _ = Nothing
 
 insertRightLeaf :: Tree Split -> Zipper Split -> Maybe (Zipper Split)
 insertRightLeaf (Leaf n) ((Node x l r), crumb:cs) = Just (Node (Split (oppositeAxis . axis . parentVal $ crumb) 0.5) (Node x l r) (Leaf n), crumb:cs)
 insertRightLeaf (Leaf n) (Leaf x, crumb:cs) = Just (Node (Split (oppositeAxis . axis . parentVal $ crumb) 0.5) (Leaf x) (Leaf n), crumb:cs)
 insertRightLeaf (Node _ _ _) z = Just z
+insertRightLeaf _ _ = Nothing
 
 findRightLeaf :: Zipper Split -> Maybe (Zipper Split)
 findRightLeaf n@(Node _ _ _, _) = goRight n >>= findRightLeaf
@@ -303,20 +303,22 @@ findLeftLeaf l@(Leaf _, _) = Just l
 findTheClosestLeftmostLeaf :: Zipper Split -> Maybe (Zipper Split)
 findTheClosestLeftmostLeaf s@(_, (RightCrumb _ _):_) = goUp s >>= goLeft >>= findRightLeaf
 findTheClosestLeftmostLeaf s@(_, (LeftCrumb _ _):_) = goUp s >>= findTheClosestLeftmostLeaf
+findTheClosestLeftmostLeaf _ = Nothing
 
 findTheClosestRightmostLeaf :: Zipper Split -> Maybe (Zipper Split)
 findTheClosestRightmostLeaf s@(_, (RightCrumb _ _):_) = goUp s >>= findTheClosestRightmostLeaf
 findTheClosestRightmostLeaf s@(_, (LeftCrumb _ _):_) = goUp s >>= goRight >>= findLeftLeaf
+findTheClosestRightmostLeaf _ = Nothing
 
 splitShiftLeftCurrent :: Zipper Split -> Maybe (Zipper Split)
 splitShiftLeftCurrent l@(_, []) = Just l
 splitShiftLeftCurrent l@(_, (RightCrumb _ _):_) = Just l -- Do nothing. We can swap windows instead.
-splitShiftLeftCurrent l@(n, c:cs) = removeCurrent l >>= findTheClosestLeftmostLeaf >>= insertRightLeaf n
+splitShiftLeftCurrent l@(n, _) = removeCurrent l >>= findTheClosestLeftmostLeaf >>= insertRightLeaf n
 
 splitShiftRightCurrent :: Zipper Split -> Maybe (Zipper Split)
 splitShiftRightCurrent l@(_, []) = Just l
 splitShiftRightCurrent l@(_, (LeftCrumb _ _):_) = Just l -- Do nothing. We can swap windows instead.
-splitShiftRightCurrent l@(n, c:cs) = removeCurrent l >>= findTheClosestRightmostLeaf >>= insertLeftLeaf n
+splitShiftRightCurrent l@(n, _) = removeCurrent l >>= findTheClosestRightmostLeaf >>= insertLeftLeaf n
 
 isAllTheWay :: Direction2D -> Zipper Split -> Bool
 isAllTheWay _ (_, []) = True

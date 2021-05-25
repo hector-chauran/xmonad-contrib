@@ -1,4 +1,6 @@
-{-# LANGUAGE DeriveDataTypeable     #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE PatternGuards #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -33,18 +35,14 @@ module XMonad.Hooks.EwmhDesktops (
 
 import Codec.Binary.UTF8.String (encode)
 import Data.Bits
-import Data.List
-import Data.Maybe
-import Data.Monoid
 import qualified Data.Map.Strict as M
 
 import XMonad
-import Control.Monad
+import XMonad.Prelude
 import qualified XMonad.StackSet as W
 
 import XMonad.Hooks.SetWMName
 import qualified XMonad.Util.ExtensibleState as E
-import XMonad.Util.XUtils (fi)
 import XMonad.Util.WorkspaceCompare
 import XMonad.Util.WindowProperties (getProp32)
 import qualified XMonad.Util.ExtensibleState as XS
@@ -55,11 +53,11 @@ import qualified XMonad.Util.ExtensibleState as XS
 -- > import XMonad
 -- > import XMonad.Hooks.EwmhDesktops
 -- >
--- > main = xmonad $ ewmhFullscreen $ ewmh def
+-- > main = xmonad $ … . ewmhFullscreen . ewmh . … $ def{…}
 --
 -- or, if fullscreen handling is not desired, just
 --
--- > main = xmonad $ ewmh def
+-- > main = xmonad $ … . ewmh . … $ def{…}
 --
 -- You may also be interested in 'docks' from "XMonad.Hooks.ManageDocks".
 --
@@ -164,9 +162,9 @@ whenChanged v action = do
 -- Generalized version of ewmhDesktopsLogHook that allows an arbitrary
 -- user-specified function to transform the workspace list (post-sorting)
 ewmhDesktopsLogHookCustom :: ([WindowSpace] -> [WindowSpace]) -> X ()
-ewmhDesktopsLogHookCustom f = withWindowSet $ \s -> do
+ewmhDesktopsLogHookCustom t = withWindowSet $ \s -> do
     sort' <- getSortByIndex
-    let ws = f $ sort' $ W.workspaces s
+    let ws = t $ sort' $ W.workspaces s
 
     -- Set number of workspaces and names thereof
     let desktopNames = map W.tag ws
@@ -179,7 +177,7 @@ ewmhDesktopsLogHookCustom f = withWindowSet $ \s -> do
     whenChanged (ClientList clientList) $ setClientList clientList
 
     -- Remap the current workspace to handle any renames that f might be doing.
-    let maybeCurrent' = W.tag <$> listToMaybe (f [W.workspace $ W.current s])
+    let maybeCurrent' = W.tag <$> listToMaybe (t [W.workspace $ W.current s])
         current = join (flip elemIndex (map W.tag ws) <$> maybeCurrent')
     whenChanged (CurrentDesktop $ fromMaybe 0 current) $
         mapM_ setCurrentDesktop current
@@ -204,6 +202,8 @@ ewmhDesktopsLogHookCustom f = withWindowSet $ \s -> do
 --  * _NET_WM_DESKTOP (move windows to other desktops)
 --
 --  * _NET_ACTIVE_WINDOW (activate another window, changing workspace if needed)
+--
+--  * _NET_CLOSE_WINDOW (close window)
 ewmhDesktopsEventHook :: Event -> X All
 ewmhDesktopsEventHook = ewmhDesktopsEventHookCustom id
 
@@ -248,41 +248,38 @@ activateLogHook mh  = XS.get >>= maybe (return ()) go . netActivated
         windows (appEndo f)
 
 handle :: ([WindowSpace] -> [WindowSpace]) -> Event -> X ()
-handle f (ClientMessageEvent {
-               ev_window = w,
-               ev_message_type = mt,
-               ev_data = d
-       }) = withWindowSet $ \s -> do
-       sort' <- getSortByIndex
-       let ws = f $ sort' $ W.workspaces s
+handle f ClientMessageEvent{ev_window = w, ev_message_type = mt, ev_data = d} =
+    withWindowSet $ \s -> do
+        sort' <- getSortByIndex
+        let ws = f $ sort' $ W.workspaces s
 
-       a_cd <- getAtom "_NET_CURRENT_DESKTOP"
-       a_d <- getAtom "_NET_WM_DESKTOP"
-       a_aw <- getAtom "_NET_ACTIVE_WINDOW"
-       a_cw <- getAtom "_NET_CLOSE_WINDOW"
-       a_ignore <- mapM getAtom ["XMONAD_TIMER"]
-       if  mt == a_cd then do
-               let n = head d
-               if 0 <= n && fi n < length ws then
-                       windows $ W.view (W.tag (ws !! fi n))
-                 else  trace $ "Bad _NET_CURRENT_DESKTOP with data[0]="++show n
-        else if mt == a_d then do
-               let n = head d
-               if 0 <= n && fi n < length ws then
-                       windows $ W.shiftWin (W.tag (ws !! fi n)) w
-                 else  trace $ "Bad _NET_DESKTOP with data[0]="++show n
-        else if mt == a_aw then do
-               lh <- asks (logHook . config)
-               XS.put (NetActivated (Just w))
-               lh
-        else if mt == a_cw then
-               killWindow w
-        else if mt `elem` a_ignore then
-           return ()
-        else
-          -- The Message is unknown to us, but that is ok, not all are meant
-          -- to be handled by the window manager
-          return ()
+        a_cd <- getAtom "_NET_CURRENT_DESKTOP"
+        a_d <- getAtom "_NET_WM_DESKTOP"
+        a_aw <- getAtom "_NET_ACTIVE_WINDOW"
+        a_cw <- getAtom "_NET_CLOSE_WINDOW"
+
+        if  | mt == a_cd, n : _ <- d, Just ww <- ws !? fi n ->
+                if W.currentTag s == W.tag ww then mempty else windows $ W.view (W.tag ww)
+            | mt == a_cd ->
+                trace $ "Bad _NET_CURRENT_DESKTOP with data=" ++ show d
+            | mt == a_d, n : _ <- d, Just ww <- ws !? fi n ->
+                if W.findTag w s == Just (W.tag ww) then mempty else windows $ W.shiftWin (W.tag ww) w
+            | mt == a_d ->
+                trace $ "Bad _NET_WM_DESKTOP with data=" ++ show d
+            | mt == a_aw, 2 : _ <- d ->
+                -- when the request comes from a pager, honor it unconditionally
+                -- https://specifications.freedesktop.org/wm-spec/wm-spec-1.3.html#sourceindication
+                windows $ W.focusWindow w
+            | mt == a_aw, W.peek s /= Just w -> do
+                lh <- asks (logHook . config)
+                XS.put (NetActivated (Just w))
+                lh
+            | mt == a_cw ->
+                killWindow w
+            | otherwise ->
+                -- The Message is unknown to us, but that is ok, not all are meant
+                -- to be handled by the window manager
+                return ()
 handle _ _ = return ()
 
 -- | Add EWMH fullscreen functionality to the given config.
@@ -392,7 +389,6 @@ addSupported :: [String] -> X ()
 addSupported props = withDisplay $ \dpy -> do
     r <- asks theRoot
     a <- getAtom "_NET_SUPPORTED"
-    fs <- getAtom "_NET_WM_STATE_FULLSCREEN"
     newSupportedList <- mapM (fmap fromIntegral . getAtom) props
     io $ do
         supportedList <- fmap (join . maybeToList) $ getWindowProperty32 dpy a r
