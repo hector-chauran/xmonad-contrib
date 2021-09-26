@@ -2,6 +2,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE LambdaCase #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  XMonad.Actions.TreeSelect
@@ -65,9 +66,8 @@ module XMonad.Actions.TreeSelect
 import Control.Monad.Reader
 import Control.Monad.State
 import Data.Tree
-import Foreign
+import Foreign (shiftL, shiftR, (.&.))
 import System.IO
-import System.Posix.Process (forkProcess, executeFile)
 import XMonad hiding (liftX)
 import XMonad.Prelude
 import XMonad.StackSet as W
@@ -317,7 +317,9 @@ treeselectAt conf@TSConfig{..} zipper hist = withDisplay $ \display -> do
         set_colormap attributes colormap
         set_background_pixel attributes ts_background
         set_border_pixel attributes 0
-        createWindow display rootw rect_x rect_y rect_width rect_height 0 (visualInfo_depth vinfo) inputOutput (visualInfo_visual vinfo) (cWColormap .|. cWBorderPixel .|. cWBackPixel) attributes
+        w <- createWindow display rootw rect_x rect_y rect_width rect_height 0 (visualInfo_depth vinfo) inputOutput (visualInfo_visual vinfo) (cWColormap .|. cWBorderPixel .|. cWBackPixel) attributes
+        setClassHint display w (ClassHint "xmonad-tree_select" "xmonad")
+        pure w
 
     liftIO $ do
         -- TODO: move below?
@@ -406,7 +408,7 @@ treeselectWorkspace c xs f = do
                             , "XConfig.workspaces: "
                             ] ++ map tag ws
         hPutStrLn stderr msg
-        _ <- forkProcess $ executeFile "xmessage" True [msg] Nothing
+        xmessage msg
         return ()
   where
     mkNode n w = do
@@ -449,8 +451,8 @@ splitPath i = case break (== '.') i of
 -- >        ]
 -- >    ]
 treeselectAction :: TSConfig (X a) -> Forest (TSNode (X a)) -> X ()
-treeselectAction c xs = treeselect c xs >>= \x -> case x of
-    Just a  -> a >> return ()
+treeselectAction c xs = treeselect c xs >>= \case
+    Just a  -> void a
     Nothing -> return ()
 
 forMForest :: (Functor m, Applicative m, Monad m) => [Tree a] -> (a -> m b) -> m [Tree b]
@@ -462,7 +464,7 @@ mapMTree f (Node x xs) = Node <$> f x <*>  mapM (mapMTree f) xs
 
 -- | Quit returning the currently selected node
 select :: TreeSelect a (Maybe a)
-select = Just <$> gets (tsn_value . cursor . tss_tree)
+select = gets (Just . (tsn_value . cursor . tss_tree))
 
 -- | Quit without returning anything
 cancel :: TreeSelect a (Maybe a)

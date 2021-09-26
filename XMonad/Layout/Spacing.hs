@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, DeriveDataTypeable, PatternGuards #-}
+{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, PatternGuards #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -19,10 +19,13 @@
 module XMonad.Layout.Spacing
     ( -- * Usage
       -- $usage
-      Border (..)
-    , Spacing (..)
-    , SpacingModifier (..)
+      Spacing (..)
     , spacingRaw
+    , spacing, spacingWithEdge
+    , smartSpacing, smartSpacingWithEdge
+
+      -- * Modify Spacing
+    , SpacingModifier (..)
     , setSmartSpacing
     , setScreenSpacing, setScreenSpacingEnabled
     , setWindowSpacing, setWindowSpacingEnabled
@@ -33,14 +36,15 @@ module XMonad.Layout.Spacing
     , incWindowSpacing, incScreenSpacing
     , decWindowSpacing, decScreenSpacing
     , incScreenWindowSpacing, decScreenWindowSpacing
+
+      -- * Modify Borders
+    , Border (..)
     , borderMap, borderIncrementBy
+
       -- * Backwards Compatibility
-      -- $backwardsCompatibility
     , SpacingWithEdge
     , SmartSpacing, SmartSpacingWithEdge
     , ModifySpacing (..)
-    , spacing, spacingWithEdge
-    , smartSpacing, smartSpacingWithEdge
     , setSpacing, incSpacing
     ) where
 
@@ -57,10 +61,40 @@ import           XMonad.Actions.MessageFeedback
 --
 -- > import XMonad.Layout.Spacing
 --
--- and modifying your layoutHook as follows (for example):
+-- and, for example, modifying your @layoutHook@ as follows:
 --
--- > layoutHook = spacingRaw True (Border 0 10 10 10) True (Border 10 10 10 10) True $
--- >              layoutHook def
+-- > main :: IO ()
+-- > main = xmonad $ def
+-- >   { layoutHook = spacingWithEdge 10 $ myLayoutHook
+-- >   }
+-- >
+-- > myLayoutHook = Full ||| ...
+--
+-- The above would add a 10 pixel gap around windows on all sides, as
+-- well as add the same amount of spacing around the edges of the
+-- screen.  If you only want to add spacing around windows, you can use
+-- 'spacing' instead.
+--
+-- There is also the 'spacingRaw' command, for more fine-grained
+-- control.  For example:
+--
+-- > layoutHook = spacingRaw True (Border 0 10 10 10) True (Border 10 10 10 10) True
+-- >            $ myLayoutHook
+--
+-- Breaking this down, the above would do the following:
+--
+--   - @True@: Enable the 'smartBorder' to not apply borders when there
+--     is only one window.
+--
+--   - @(Border 0 10 10 10)@: Add a 'screenBorder' of 10 pixels in every
+--     direction but the top.
+--
+--   - @True@: Enable the 'screenBorder'.
+--
+--   - @(Border 10 10 10 10)@: Add a 'windowBorder' of 10 pixels in
+--     every direction.
+--
+--   - @True@: Enable the 'windowBorder'.
 
 -- | Represent the borders of a rectangle.
 data Border = Border
@@ -146,7 +180,7 @@ instance Eq a => LayoutModifier Spacing a where
             else (wrs,ml)
       where
         moveByQuadrant :: Rectangle -> Rectangle -> Border -> Rectangle
-        moveByQuadrant rr mr@(Rectangle {rect_x = x, rect_y = y}) (Border bt bb br bl) =
+        moveByQuadrant rr mr@Rectangle{rect_x = x, rect_y = y} (Border bt bb br bl) =
             let (rcx,rcy) = R.center rr
                 (mcx,mcy) = R.center mr
                 dx = orderSelect (compare mcx rcx) (bl,0,negate br)
@@ -208,7 +242,6 @@ data SpacingModifier
     | ModifyScreenBorderEnabled (Bool -> Bool)
     | ModifyWindowBorder (Border -> Border)
     | ModifyWindowBorderEnabled (Bool -> Bool)
-    deriving (Typeable)
 
 instance Message SpacingModifier
 
@@ -330,13 +363,8 @@ orderSelect o (lt,eq,gt) = case o of
 -----------------------------------------------------------------------------
 {-# DEPRECATED SpacingWithEdge, SmartSpacing, SmartSpacingWithEdge "Use Spacing instead." #-}
 {-# DEPRECATED ModifySpacing "Use SpacingModifier instead, perhaps with sendMessages." #-}
-{-# DEPRECATED spacing, spacingWithEdge, smartSpacing, smartSpacingWithEdge "Use spacingRaw instead." #-}
 {-# DEPRECATED setSpacing "Use setScreenWindowSpacing instead." #-}
 {-# DEPRECATED incSpacing "Use incScreenWindowSpacing instead." #-}
-
--- $backwardsCompatibility
--- The following functions and types exist solely for compatibility with
--- pre-0.14 releases.
 
 -- | A type synonym for the 'Spacing' 'LayoutModifier'.
 type SpacingWithEdge = Spacing
@@ -349,7 +377,7 @@ type SmartSpacingWithEdge = Spacing
 
 -- | Message to dynamically modify (e.g. increase\/decrease\/set) the size of
 -- the screen spacing and window spacing. See 'SpacingModifier'.
-data ModifySpacing = ModifySpacing (Int -> Int) deriving (Typeable)
+newtype ModifySpacing = ModifySpacing (Int -> Int)
 
 instance Message ModifySpacing
 

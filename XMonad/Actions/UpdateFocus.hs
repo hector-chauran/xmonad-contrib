@@ -16,7 +16,8 @@ module XMonad.Actions.UpdateFocus (
     -- * Usage
     -- $usage
     focusOnMouseMove,
-    adjustEventInput
+    adjustEventInput,
+    focusUnderPointer,
 ) where
 
 import XMonad
@@ -39,7 +40,7 @@ import qualified XMonad.StackSet as W
 
 -- | Changes the focus if the mouse is moved within an unfocused window.
 focusOnMouseMove :: Event -> X All
-focusOnMouseMove (MotionEvent { ev_x = x, ev_y = y, ev_window = root }) = do
+focusOnMouseMove MotionEvent{ ev_x = x, ev_y = y, ev_window = root } = do
     -- check only every 15 px to avoid excessive calls to translateCoordinates
     when (x `mod` 15 == 0 || y `mod` 15 == 0) $ do
       dpy <- asks display
@@ -57,3 +58,25 @@ adjustEventInput = withDisplay $ \dpy -> do
   io $ selectInput dpy rootw $  substructureRedirectMask .|. substructureNotifyMask
                                 .|. enterWindowMask .|. leaveWindowMask .|. structureNotifyMask
                                 .|. buttonPressMask .|. pointerMotionMask
+
+-- | Focus the window under the mouse pointer, unless we're currently changing
+-- focus with the mouse or dragging. This is the inverse to
+-- "XMonad.Actions.UpdatePointer": instead of moving the mouse pointer to
+-- match the focus, we change the focus to match the mouse pointer.
+--
+-- This is meant to be used together with
+-- 'XMonad.Actions.UpdatePointer.updatePointer' in individual key bindings.
+-- Bindings that change focus should invoke
+-- 'XMonad.Actions.UpdatePointer.updatePointer' at the end, bindings that
+-- switch workspaces or change layouts should call 'focusUnderPointer' at the
+-- end. Neither should go to 'logHook', as that would override the other.
+--
+-- This is more finicky to set up than 'focusOnMouseMove', but ensures that
+-- focus is updated immediately, without having to touch the mouse.
+focusUnderPointer :: X ()
+focusUnderPointer = whenX (not <$> (asks mouseFocused <||> gets (isJust . dragging))) $ do
+  dpy <- asks display
+  root <- asks theRoot
+  (_, _, w', _, _, _, _, _) <- io $ queryPointer dpy root
+  w <- gets (W.peek . windowset)
+  when (w' /= none && Just w' /= w) (focus w')

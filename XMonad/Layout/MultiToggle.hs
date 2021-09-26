@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable, ExistentialQuantification, Rank2Types, MultiParamTypeClasses, FunctionalDependencies, FlexibleInstances, FlexibleContexts, PatternGuards #-}
+{-# LANGUAGE ExistentialQuantification, Rank2Types, FunctionalDependencies, FlexibleInstances, FlexibleContexts, PatternGuards, ScopedTypeVariables #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -25,6 +25,7 @@ module XMonad.Layout.MultiToggle (
     single,
     mkToggle,
     mkToggle1,
+    isToggleActive,
 
     HList,
     HCons,
@@ -37,6 +38,7 @@ import XMonad.Prelude hiding (find)
 import XMonad.StackSet (Workspace(..))
 
 import Control.Arrow
+import Data.IORef
 import Data.Typeable
 
 -- $usage
@@ -86,11 +88,11 @@ import Data.Typeable
 -- which is an instance of the 'Transformer' class.  For example, here
 -- is the definition of @MIRROR@:
 --
--- > data MIRROR = MIRROR deriving (Read, Show, Eq, Typeable)
+-- > data MIRROR = MIRROR deriving (Read, Show, Eq)
 -- > instance Transformer MIRROR Window where
 -- >     transform _ x k = k (Mirror x) (\(Mirror x') -> x')
 --
--- Note, you need to put @{-\# LANGUAGE DeriveDataTypeable,
+-- Note, you need to put @{-\# LANGUAGE
 -- TypeSynonymInstances, MultiParamTypeClasses \#-}@ at the
 -- beginning of your file.
 
@@ -113,7 +115,6 @@ transform' t (EL l det) = transform t l (\l' det' -> EL l' (det . det'))
 
 -- | Toggle the specified layout transformer.
 data Toggle a = forall t. (Transformer t a) => Toggle t
-    deriving (Typeable)
 
 instance (Typeable a) => Message (Toggle a)
 
@@ -206,8 +207,27 @@ instance (Typeable a, Show ts, Typeable ts, HList ts a, LayoutClass l a) => Layo
                             currLayout = (if cur then id else transform' t) (EL (det l') id),
                             currIndex = if cur then Nothing else i
                         }
-                    where cur = (i == currIndex mt)
+                    where cur = i == currIndex mt
+        | Just (MultiToggleActiveQueryMessage t ref :: MultiToggleActiveQueryMessage a) <- fromMessage m
+        , i@(Just _) <- find (transformers mt) t
+            = Nothing <$ io (writeIORef ref (Just (i == currIndex mt)))
         | otherwise
             = case currLayout mt of
-                EL l det -> (fmap (\x -> mt { currLayout = EL x det })) <$>
+                EL l det -> fmap (\x -> mt { currLayout = EL x det }) <$>
                     handleMessage l m
+
+data MultiToggleActiveQueryMessage a = forall t. (Transformer t a) =>
+    MultiToggleActiveQueryMessage t (IORef (Maybe Bool))
+
+instance (Typeable a) => Message (MultiToggleActiveQueryMessage a)
+
+-- | Query the state of a 'Transformer' on a given workspace.
+--
+-- To query the current workspace, use something like this:
+--
+-- > withWindowSet (isToggleActive t . W.workspace . W.current)
+isToggleActive :: Transformer t Window => t -> WindowSpace -> X (Maybe Bool)
+isToggleActive t w = do
+    ref <- io $ newIORef Nothing
+    sendMessageWithNoRefresh (MultiToggleActiveQueryMessage t ref) w
+    io $ readIORef ref

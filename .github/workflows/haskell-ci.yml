@@ -14,8 +14,17 @@
 #
 name: Haskell-CI
 on:
-  - push
-  - pull_request
+  push:
+  pull_request:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+    inputs:
+      version:
+        # releases to Hackage are final and cannot be reverted, thus require
+        # manual entry of version as a poor man's mistake avoidance
+        description: version (must match version in cabal file)
 jobs:
   linux:
     name: Haskell-CI - Linux - ${{ matrix.compiler }}
@@ -28,7 +37,8 @@ jobs:
         include:
           - compiler: ghc-9.0.1
             allow-failure: false
-          - compiler: ghc-8.10.3
+            upload: true
+          - compiler: ghc-8.10.4
             allow-failure: false
           - compiler: ghc-8.8.4
             allow-failure: false
@@ -100,6 +110,11 @@ jobs:
       - name: update cabal index
         run: |
           $CABAL v2-update -v
+      - name: cache (tools)
+        uses: actions/cache@v2
+        with:
+          key: ${{ runner.os }}-${{ matrix.compiler }}-tools-6c71d9d3
+          path: ~/.haskell-ci-tools
       - name: install cabal-plan
         run: |
           mkdir -p $HOME/.cabal/bin
@@ -109,6 +124,12 @@ jobs:
           rm -f cabal-plan.xz
           chmod a+x $HOME/.cabal/bin/cabal-plan
           cabal-plan --version
+      - name: install hlint
+        run: |
+          if [ $((HCNUMVER >= 90000)) -ne 0 ] ; then HLINTVER=$(cd /tmp && (${CABAL} v2-install -v $ARG_COMPILER --dry-run hlint  --constraint='hlint >=3.2 && <3.3' |  perl -ne 'if (/\bhlint-(\d+(\.\d+)*)\b/) { print "$1"; last; }')); echo "HLint version $HLINTVER" ; fi
+          if [ $((HCNUMVER >= 90000)) -ne 0 ] ; then if [ ! -e $HOME/.haskell-ci-tools/hlint-$HLINTVER/hlint ]; then echo "Downloading HLint version $HLINTVER"; mkdir -p $HOME/.haskell-ci-tools; curl --write-out 'Status Code: %{http_code} Redirects: %{num_redirects} Total time: %{time_total} Total Dsize: %{size_download}\n' --silent --location --output $HOME/.haskell-ci-tools/hlint-$HLINTVER.tar.gz "https://github.com/ndmitchell/hlint/releases/download/v$HLINTVER/hlint-$HLINTVER-x86_64-linux.tar.gz"; tar -xzv -f $HOME/.haskell-ci-tools/hlint-$HLINTVER.tar.gz -C $HOME/.haskell-ci-tools; fi ; fi
+          if [ $((HCNUMVER >= 90000)) -ne 0 ] ; then mkdir -p $CABAL_DIR/bin && ln -sf "$HOME/.haskell-ci-tools/hlint-$HLINTVER/hlint" $CABAL_DIR/bin/hlint ; fi
+          if [ $((HCNUMVER >= 90000)) -ne 0 ] ; then hlint --version ; fi
       - name: checkout
         uses: actions/checkout@v2
         with:
@@ -141,6 +162,8 @@ jobs:
             location: https://github.com/xmonad/xmonad
             branch:   master
 
+          optimization: False
+
           package xmonad-contrib
             flags:       +pedantic
             ghc-options: -j
@@ -171,14 +194,75 @@ jobs:
       - name: tests
         run: |
           $CABAL v2-test $ARG_COMPILER $ARG_TESTS $ARG_BENCH all --test-show-details=direct
+      - name: hlint
+        run: |
+          if [ $((HCNUMVER >= 90000)) -ne 0 ] ; then (cd ${PKGDIR_xmonad_contrib} && hlint -h ${GITHUB_WORKSPACE}/source/.hlint.yaml .) ; fi
       - name: cabal check
         run: |
           cd ${PKGDIR_xmonad_contrib} || false
           ${CABAL} -vnormal check
       - name: haddock
         run: |
-          $CABAL v2-haddock $ARG_COMPILER --with-haddock $HADDOCK $ARG_TESTS $ARG_BENCH all
+          $CABAL v2-haddock $ARG_COMPILER --with-haddock $HADDOCK $ARG_TESTS $ARG_BENCH --haddock-for-hackage --builddir $GITHUB_WORKSPACE/haddock all
       - name: unconstrained build
         run: |
           rm -f cabal.project.local
           $CABAL v2-build $ARG_COMPILER --disable-tests --disable-benchmarks all
+      - name: upload artifacts (sdist)
+        if: matrix.upload
+        uses: actions/upload-artifact@v2
+        with:
+          path: ${{ github.workspace }}/sdist/*.tar.gz
+      - name: upload artifacts (haddock)
+        if: matrix.upload
+        uses: actions/upload-artifact@v2
+        with:
+          path: ${{ github.workspace }}/haddock/*-docs.tar.gz
+      - name: hackage upload (candidate)
+        if: matrix.upload && github.event_name == 'release'
+        run: |
+          set -ex
+          PACKAGE_VERSION="${PACKAGE_VERSION#v}"
+          curl \
+            --silent --show-error --fail \
+            --header "Accept: text/plain" \
+            --header "Authorization: X-ApiKey $HACKAGE_API_KEY" \
+            --form package=@"${GITHUB_WORKSPACE}/sdist/${PACKAGE_NAME}-${PACKAGE_VERSION}.tar.gz" \
+            https://hackage.haskell.org/packages/candidates/
+          curl \
+            --silent --show-error --fail \
+            -X PUT \
+            --header "Accept: text/plain" \
+            --header "Authorization: X-ApiKey $HACKAGE_API_KEY" \
+            --header "Content-Type: application/x-tar" \
+            --header "Content-Encoding: gzip" \
+            --data-binary @"${GITHUB_WORKSPACE}/haddock/${PACKAGE_NAME}-${PACKAGE_VERSION}-docs.tar.gz" \
+            https://hackage.haskell.org/package/${PACKAGE_NAME}-${PACKAGE_VERSION}/candidate/docs
+        env:
+          HACKAGE_API_KEY: ${{ secrets.HACKAGE_API_KEY }}
+          PACKAGE_NAME: ${{ github.event.repository.name }}
+          PACKAGE_VERSION: ${{ github.event.release.tag_name }}
+      - name: hackage upload (release)
+        if: matrix.upload && github.event_name == 'workflow_dispatch'
+        run: |
+          set -ex
+          PACKAGE_VERSION="${PACKAGE_VERSION#v}"
+          curl \
+            --silent --show-error --fail \
+            --header "Accept: text/plain" \
+            --header "Authorization: X-ApiKey $HACKAGE_API_KEY" \
+            --form package=@"${GITHUB_WORKSPACE}/sdist/${PACKAGE_NAME}-${PACKAGE_VERSION}.tar.gz" \
+            https://hackage.haskell.org/packages/
+          curl \
+            --silent --show-error --fail \
+            -X PUT \
+            --header "Accept: text/plain" \
+            --header "Authorization: X-ApiKey $HACKAGE_API_KEY" \
+            --header "Content-Type: application/x-tar" \
+            --header "Content-Encoding: gzip" \
+            --data-binary @"${GITHUB_WORKSPACE}/haddock/${PACKAGE_NAME}-${PACKAGE_VERSION}-docs.tar.gz" \
+            https://hackage.haskell.org/package/${PACKAGE_NAME}-${PACKAGE_VERSION}/docs
+        env:
+          HACKAGE_API_KEY: ${{ secrets.HACKAGE_API_KEY }}
+          PACKAGE_NAME: ${{ github.event.repository.name }}
+          PACKAGE_VERSION: ${{ github.event.inputs.version }}

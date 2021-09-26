@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses #-}
-{-# LANGUAGE TypeSynonymInstances, PatternGuards, DeriveDataTypeable #-}
+{-# LANGUAGE PatternGuards #-}
 {-# OPTIONS_GHC -Wno-dodgy-imports #-} -- singleton in Data.List since base 4.15
 
 -----------------------------------------------------------------------------
@@ -122,7 +122,6 @@ data BorderMessage
     | ResetBorder Window
         -- ^ Reset the effects of any 'HasBorder' messages on the specified
         -- window.
-    deriving (Typeable)
 
 instance Message BorderMessage
 
@@ -144,7 +143,7 @@ data ConfigurableBorder p w = ConfigurableBorder
 -- | Only necessary with 'BorderMessage' - remove non-existent windows from the
 -- 'alwaysHidden' or 'neverHidden' lists.
 borderEventHook :: Event -> X All
-borderEventHook (DestroyWindowEvent { ev_window = w }) = do
+borderEventHook DestroyWindowEvent{ ev_window = w } = do
     broadcastMessage $ ResetBorder w
     return $ All True
 borderEventHook _ = return $ All True
@@ -153,7 +152,7 @@ instance (Read p, Show p, SetsAmbiguous p) => LayoutModifier (ConfigurableBorder
     unhook (ConfigurableBorder _ _ _ ch) = asks (borderWidth . config) >>= setBorders ch
 
     redoLayout cb@(ConfigurableBorder gh ah nh ch) lr mst wrs = do
-        let gh' wset = let lh = (hiddens gh wset lr mst wrs)
+        let gh' wset = let lh = hiddens gh wset lr mst wrs
                        in  return $ (ah `union` lh) \\ nh
         ch' <- withWindowSet gh'
         asks (borderWidth . config) >>= setBorders (ch \\ ch')
@@ -164,7 +163,7 @@ instance (Read p, Show p, SetsAmbiguous p) => LayoutModifier (ConfigurableBorder
         | Just (HasBorder b w) <- fromMessage m =
             let consNewIf l True  = if w `elem` l then Nothing else Just (w:l)
                 consNewIf l False = Just l
-            in  (ConfigurableBorder gh) <$> consNewIf ah (not b)
+            in  ConfigurableBorder gh <$> consNewIf ah (not b)
                                         <*> consNewIf nh b
                                         <*> pure ch
         | Just (ResetBorder w) <- fromMessage m =
@@ -280,6 +279,8 @@ instance SetsAmbiguous Ambiguity where
                         in lr == wr1 && (not . or) vu
                     OnlyLayoutFloat ->
                         lr == wr1
+                    OnlyFloat ->
+                        True
                     _ ->
                         wr1 `R.supersetOf` sr
                 return w1
@@ -289,6 +290,7 @@ instance SetsAmbiguous Ambiguity where
               | Screen <- amb = [w]
               | OnlyScreenFloat <- amb = []
               | OnlyLayoutFloat <- amb = []
+              | OnlyFloat <- amb = []
               | OnlyLayoutFloatBelow <- amb = []
               | OtherIndicated <- amb
               , let nonF = map integrate $ W.current wset : W.visible wset
@@ -327,6 +329,9 @@ data Ambiguity
         -- ^ Focus in an empty screen does not count as ambiguous.
     | OtherIndicated
         -- ^ No borders on full when all other screens have borders.
+    | OnlyFloat
+        -- ^ Remove borders on all floating windows; tiling windows of
+        -- any kinds are not affected.
     | Screen
         -- ^ Borders are never drawn on singleton screens.  With this one you
         -- really need another way such as a statusbar to detect focus.

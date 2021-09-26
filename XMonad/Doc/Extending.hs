@@ -336,8 +336,8 @@ edit your key bindings.
     Experimental rewrite of "XMonad.Layout.WindowNavigation".
 
 * "XMonad.Actions.WithAll":
-    Provides functions for performing a given action on all windows of
-    the current workspace.
+    Provides functions for performing a given action on all or certain
+    groups of windows on the current workspace.
 
 * "XMonad.Actions.Workscreen":
     A workscreen permits to display a set of workspaces on several screens. In
@@ -543,6 +543,12 @@ Here is a list of the modules found in @XMonad.Hooks@:
     even if it was opened in a tiled layout initially. The EventHook makes sure
     that windows are deleted from the PositionStore when they are closed.
 
+* "XMonad.Hooks.Rescreen":
+    Custom hooks for screen (xrandr) configuration changes. These can be used
+    to restart/reposition status bars or systrays automatically after xrandr,
+    as well as to actually invoke xrandr or autorandr when an output is
+    (dis)connected.
+
 * "XMonad.Hooks.RestoreMinimized":
     (Deprecated: Use XMonad.Hooks.Minimize) Lets you restore minimized
     windows (see "XMonad.Layout.Minimize") by selecting them on a
@@ -572,6 +578,11 @@ Here is a list of the modules found in @XMonad.Hooks@:
         pretty-printing abstraction 'XMonad.Hooks.StatusBar.PP.PP' and a set
         of functions to interact with it.
 
+* "XMonad.Hooks.TaffybarPagerHints"
+    This module exports additional X properties that allow
+    [taffybar](https://github.com/taffybar/taffybar) to understand the state of
+    XMonad.
+
 * "XMonad.Hooks.ToggleHook":
     Hook and keybindings for toggling hook behavior.
 
@@ -592,7 +603,7 @@ Here is a list of the modules found in @XMonad.Hooks@:
     Keeps track of workspace viewing order.
 
 * "XMonad.Hooks.WindowSwallowing"
-    A handleEventHook that implements window swallowing:
+    handleEventHooks that implement window swallowing or sublayouting:
     Hide parent windows like terminals when opening other programs (like image viewers) from within them,
     restoring them once the child application closes.
 
@@ -717,6 +728,9 @@ For more information on using those modules for customizing your
 
 * "XMonad.Layout.DwmStyle":
     A layout modifier for decorating windows in a dwm like style.
+
+* "XMonad.Layout.FixedAspectRatio"
+    A layout modifier for user provided per-window aspect ratios.
 
 * "XMonad.Layout.FixedColumn":
     A layout much like Tall, but using a multiple of a window's minimum
@@ -1170,6 +1184,12 @@ A non complete list with a brief description:
 * "XMonad.Util.EZConfig":
     Configure key bindings easily, including a
     parser for writing key bindings in "M-C-x" style.
+
+* "XMonad.Util.ExtensibleConf":
+    Extensible and composable configuration for contrib modules. Allows
+    contrib modules to store custom configuration values inside
+    'XMonad.Core.XConfig'. This lets them create custom hooks, ensure they
+    hook into xmonad core only once, and possibly more.
 
 * "XMonad.Util.ExtensibleState":
     Module for storing custom mutable state in xmonad.
